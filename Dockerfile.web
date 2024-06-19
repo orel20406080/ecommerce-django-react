@@ -1,0 +1,31 @@
+# Dockerfile.we
+
+# שלב 1: קביעת בסיס התמונות
+FROM python:3.10-slim
+
+# שלב 2: הגדרת משתנה סביבה
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# שלב 3: התקנת כלי עזר וניקוי קבצים זמניים
+RUN apt-get update \
+    && apt-get install -y gcc \
+    && apt-get install -y --no-install-recommends \
+       libjpeg-dev \
+       zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# שלב 4: יצירת תיקיית עבודה והעתקת הקבצים
+WORKDIR /app
+COPY . /app/
+
+# שלב 5: התקנת התלותות של Python
+RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# שלב 6: פתיחת פורט 8000
+EXPOSE 8000
+
+# שלב 7: הרצת השרת
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]
