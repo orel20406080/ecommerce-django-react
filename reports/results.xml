@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="5" time="1.969" timestamp="2024-07-02T02:11:24.814447" hostname="Orels-MBP.lan"><testcase classname="tests.api.test_products" name="test_product_creation" time="0.612" /><testcase classname="tests.api.test_user" name="test_user_create" time="0.161" /><testcase classname="tests.api.test_user" name="test_set_check_password" time="0.299" /><testcase classname="tests.api.test_user" name="test_register_user" time="0.464" /><testcase classname="tests.api.test_products" name="test_api_product_creation" time="0.033"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response status_code=401, &quot;application/json&quot;&gt;.status_code">def test_api_product_creation():
+        client = APIClient()
+    
+        response = client.post("/api/products/create/")
+    
+        # data = response.data
+    
+&gt;       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = &lt;Response status_code=401, "application/json"&gt;.status_code
+
+tests/api/test_products.py:39: AssertionError</failure></testcase></testsuite></testsuites>
