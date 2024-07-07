@@ -2,21 +2,53 @@ version: '3.8'
 
 services:
   db:
-    image: my-db
-    container_name: db
-    ports:
-      - "5432:5432"
+    image: postgres:13
+    container_name: postgres
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mydatabase
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: ecommerceuser
+      POSTGRES_PASSWORD: ecommercedbpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
 
   web:
-    image: my-web-app
+    image: orel20406080/my-web-ecommerce-jango:latest
     container_name: web
+    environment:
+      - DEBUG=0
+      - DJANGO_SETTINGS_MODULE=backend.settings
+      - PYTHONPATH=/app:/app/backend:/app/base
+      - POSTGRES_DB=ecommerce
+      - POSTGRES_USER=ecommerceuser
+      - POSTGRES_PASSWORD=ecommercedbpassword
+      - POSTGRES_HOST=db
+      - REACT_APP_BACKEND_URL=http://localhost:8000
+    volumes:
+      - ./backend:/app/backend
+      - ./base:/app/base
+      - ./requirements.txt:/app/requirements.txt
+      - ./manage.py:/app/manage.py
+      - ./static:/app/static
+      - ./media:/app/media
+      - ./staticfiles:/app/staticfiles
+      - ./data_dump.json:/tmp/data_dump.json
     depends_on:
       - db
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgres://user:password@db:5432/mydatabase
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
