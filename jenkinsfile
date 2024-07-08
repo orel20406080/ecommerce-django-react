@@ -1,0 +1,139 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL = 'https://github.com/orel20406080/ecommerce-django-react.git'
+        DJANGO_SETTINGS_MODULE = 'backend.settings'
+        SLACK_WORKSPACE = 'Ecommerce-Projec'
+        DOCKER_IMAGE_WEB = 'orel20406080/my-web-ecommerce-jango'
+        DOCKERHUB_CREDENTIALS = credentials('docker-hub-credentials')
+        PATH = "${env.PATH}:/Applications/Docker.app/Contents/Resources/bin"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git(url: "${REPO_URL}", branch: 'main')
+            }
+        }
+
+        stage('Setup and Run App') {
+            steps {
+                script {
+                    dir('ecommerce-django-react') {
+                        sh '''
+                        echo "Current directory:"
+                        pwd
+                        echo "Directory contents:"
+                        ls -al
+
+                        echo "Creating virtual environment..."
+                        python3 -m venv env
+
+                        echo "Activating virtual environment..."
+                        source env/bin/activate
+
+                        echo "Upgrading pip..."
+                        pip install --upgrade pip
+
+                        echo "Checking for requirements.txt..."
+                        if [ -f "requirements.txt" ]; then
+                            echo "requirements.txt found."
+                            echo "Installing requirements..."
+                            pip install -r requirements.txt
+                        else
+                            echo "requirements.txt not found"
+                            echo "Moving up one directory..."
+                            cd ..
+                            if [ -f "requirements.txt" ]; then
+                                echo "requirements.txt found in the parent directory."
+                                echo "Installing requirements..."
+                                pip install -r requirements.txt
+                            else
+                                echo "requirements.txt not found in the parent directory as well"
+                                exit 1
+                            fi
+                        fi
+                        echo "Migrating the database..."
+                        python manage.py migrate
+                        echo "Running the server..."
+                        python manage.py runserver 0.0.0.0:8000 &
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Testing') {
+            steps {
+                sh '''
+                echo "Activating virtual environment..."
+                source ./env/bin/activate
+                echo "Installing requirements..."
+                pip install -r requirements.txt
+                echo "Running tests with pytest..."
+                pytest --html=./report.html
+                '''
+            }
+        }
+
+        stage('Publish Report') {
+            steps {
+                publishHTML(target: [
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: '.',
+                    reportFiles: 'report.html',
+                    reportName: 'Test Report'
+                ])
+            }
+        }
+
+        stage('Check Docker Availability') {
+            steps {
+                sh '''
+                echo "Checking Docker availability..."
+                echo "Current PATH: $PATH"
+                which docker || true
+                docker --version || true
+                '''
+            }
+        }
+
+        stage('Test Docker Login') {
+            when {
+                expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+            steps {
+                script {
+                    retry(3) {
+                        withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                            sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build and Push Docker Image') {
+            when {
+                expression { currentBuild.currentResult == 'SUCCESS' }
+            }
+            steps {
+                script {
+                    sh 'docker build -t ${DOCKER_IMAGE_WEB}:latest .'
+                    sh 'docker tag ${DOCKER_IMAGE_WEB}:latest ${DOCKER_IMAGE_WEB}:${BUILD_NUMBER}'
+                    sh 'docker push ${DOCKER_IMAGE_WEB}:latest'
+                    sh 'docker push ${DOCKER_IMAGE_WEB}:${BUILD_NUMBER}'
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            slackSend(channel: "#all-ecommerce-projec", message: """The build status is: ${currentBuild.currentResult}, on project: ${env.JOB_NAME}, find test report in this URL: ${env.BUILD_URL}/Test_20Report""", teamDomain: "${env.SLACK_WORKSPACE}")
+        }
+    }
+}
